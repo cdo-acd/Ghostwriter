@@ -155,7 +155,7 @@
     },
     {
         "model": "shepherd.serverprovider",
-        "pk": 7,
+        "pk": 8,
         "fields": {
             "server_provider": "Vultr"
         }

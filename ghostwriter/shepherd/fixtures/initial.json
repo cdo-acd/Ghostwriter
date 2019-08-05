@@ -154,6 +154,13 @@
         }
     },
     {
+        "model": "shepherd.serverprovider",
+        "pk": 8,
+        "fields": {
+            "server_provider": "Vultr"
+        }
+    },
+    {
         "model": "shepherd.serverrole",
         "pk": 1,
         "fields": {

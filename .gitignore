@@ -276,4 +276,3 @@ ghostwriter/media/
 ssl/*.crt
 ssl/*.key
 ssl/dhparam.pem
-/envs.zip

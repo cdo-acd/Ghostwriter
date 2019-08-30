@@ -275,4 +275,8 @@ ghostwriter/media/
 # SSL certificates
 ssl/*.crt
 ssl/*.key
+<<<<<<< HEAD
 
+=======
+ssl/dhparam.pem
+>>>>>>> parent of 9d44661... ignore envs.zip

@@ -275,4 +275,4 @@ ghostwriter/media/
 # SSL certificates
 ssl/*.crt
 ssl/*.key
-ssl/dhparam.pem
+

@@ -161,6 +161,13 @@
         }
     },
     {
+        "model": "shepherd.serverprovider",
+        "pk": 9,
+        "fields": {
+            "server_provider": "HostSailor"
+        }
+    },
+    {
         "model": "shepherd.serverrole",
         "pk": 1,
         "fields": {

@@ -115,6 +115,50 @@ def server_list(request):
 
 
 @login_required
+def server_search(request):
+    """View that takes POST data for a server IP address and a project ID
+    to redirect to the server checkout page.
+    """
+    if request.method == 'POST':
+        ip_address = request.POST.get('server_search').strip()
+        project_id = request.POST.get('project_id')
+        try:
+            server_instance = StaticServer.objects.get(ip_address=ip_address)
+        except Exception:
+            messages.warning(
+                request,
+                'No server was found matching %s' %
+                ip_address, extra_tags='alert-warning')
+            return HttpResponseRedirect(reverse(
+                    'rolodex:project_detail',
+                    kwargs={'pk': project_id}))
+        if server_instance:
+            unavailable = ServerStatus.objects.get(server_status='Unavailable')
+            if server_instance.server_status == unavailable:
+                messages.warning(
+                    request,
+                    'The server matching "%s" is currently marked as unavailable' %
+                    ip_address, extra_tags='alert-warning')
+                return HttpResponseRedirect(reverse(
+                        'rolodex:project_detail',
+                        kwargs={'pk': project_id}))
+            else:
+                return HttpResponseRedirect(reverse(
+                        'shepherd:server_checkout',
+                        kwargs={'pk': server_instance.id}))
+        else:
+            messages.success(
+                request,
+                'No server was found matching %s' %
+                ip_address, extra_tags='alert-success')
+            return HttpResponseRedirect(reverse(
+                    'rolodex:project_detail',
+                    kwargs={'pk': project_id}))
+    else:
+        return HttpResponseRedirect(reverse('rolodex:index'))
+
+
+@login_required
 def ajax_load_projects(request):
     """View function used with AJAX for filtering project dropdown lists based
     on changes to a client dropdown list.
@@ -126,6 +170,7 @@ def ajax_load_projects(request):
         'shepherd/project_dropdown_list.html',
         {'projects': projects})
 
+
 @login_required
 def ajax_load_project(request):
     """View function used with AJAX for retrieving project details.
@@ -135,6 +180,7 @@ def ajax_load_project(request):
     project = Project.objects.filter(id=project_id)
     data = serializers.serialize('json', project)
     return HttpResponse(data, content_type='application/json')
+
 
 @login_required
 def domain_release(request, pk):
@@ -224,25 +270,32 @@ def user_assets(request):
     """View function for displaying domains and servers checked-out for the
     current user.
     """
-    # Fetch the domain and server history for the current user
-    domains = History.objects.select_related(
-                    'domain', 'domain__domain_status', 'project',
-                    'activity_type'
-                ).filter(
-                    operator=request.user,
-                    domain__domain_status__domain_status='Unavailable',
-                    end_date__gte=datetime.datetime.now() -
-                    datetime.timedelta(days=1)
-                ).order_by('end_date')
-    servers = ServerHistory.objects.select_related(
-                    'server', 'server__server_status', 'project',
-                    'server_role', 'activity_type'
-                ).filter(
-                    operator=request.user,
-                    server__server_status__server_status='Unavailable',
-                    end_date__gte=datetime.datetime.now() -
-                    datetime.timedelta(days=1)
-                ).order_by('end_date')
+    # Fetch the domain history for the current user
+    domains = []
+    unavailable_domains = Domain.objects.select_related(
+                            'domain_status'
+                        ).filter(
+                            domain_status__domain_status='Unavailable'
+                        )
+    for domain in unavailable_domains:
+        domain_history = History.objects.filter(
+                            operator=request.user,
+                            domain=domain
+                        ).order_by('end_date').last()
+        domains.append(domain_history)
+    # Fetch the server history for the current user
+    servers = []
+    unavailable_servers = StaticServer.objects.select_related(
+                            'server_status'
+                        ).filter(
+                            server_status__server_status='Unavailable'
+                        )
+    for server in unavailable_servers:
+        server_history = ServerHistory.objects.filter(
+                            operator=request.user,
+                            server=server
+                        ).order_by('end_date').last()
+        servers.append(server_history)
     # Pass the context on to the custom HTML
     context = {
                 'domains': domains,
@@ -284,13 +337,13 @@ def burn(request, pk):
     # If this is a GET (or any other method) create the default form
     else:
         form = BurnForm()
-    # Prepare the context for the checkout form
+    # Prepare the context for the burn form
     context = {
                 'form': form,
                 'domain_instance': domain_instance,
                 'domain_name': domain_instance.name
                }
-    # Render the checkout form page
+    # Render the burn form page
     return render(request, 'shepherd/burn.html', context)
 
 
@@ -374,6 +427,9 @@ def import_domains(request):
                 domain_status = DomainStatus.objects.get(
                     domain_status='Available')
                 entry['domain_status'] = domain_status
+            # Accept any auto_renew value (True, X, Yes, ...) to mean True
+            if 'auto_renew' in entry:
+                entry['auto_renew'] = True
             # The last_used_by field will only be set by Shepherd at check-out
             if 'last_used_by' in entry:
                 entry['last_used_by'] = None
@@ -395,6 +451,10 @@ def import_domains(request):
                     # This is a new domain so create it
                     new_domain = Domain(**entry)
                     new_domain.save()
+                messages.success(
+                    request,
+                    'Successfully parsed %s' % entry['name'],
+                    extra_tags='alert-success')
             # If there is an error, store as string and then display
             except Exception as e:
                 messages.error(
@@ -527,6 +587,10 @@ def import_servers(request):
                     # This is a new server so create it
                     new_server = StaticServer(**entry)
                     new_server.save()
+                messages.success(
+                    request,
+                    'Successfully parsed %s' % entry['ip_address'],
+                    extra_tags='alert-success')
             # If there is an error, store as string and then display
             except Exception as e:
                 messages.error(
@@ -1076,7 +1140,8 @@ class ServerHistoryCreate(LoginRequiredMixin, CreateView):
             self.request,
             'Server successfully checked-out.',
             extra_tags='alert-success')
-        return reverse('shepherd:user_assets')
+        # return reverse('shepherd:user_assets')
+        return reverse('rolodex:project_detail', kwargs={'pk': self.object.project.pk})
 
     def get_context_data(self, **kwargs):
         """Override the `get_context_data()` function to provide additional
@@ -1101,7 +1166,7 @@ class ServerHistoryUpdate(LoginRequiredMixin, UpdateView):
             self.request,
             'Server history successfully updated.',
             extra_tags='alert-success')
-        return reverse('shepherd:project_detail', kwargs={'pk': self.object.project.pk})
+        return reverse('rolodex:project_detail', kwargs={'pk': self.object.project.pk})
 
     def get_context_data(self, **kwargs):
         """Override the `get_context_data()` function to provide additional

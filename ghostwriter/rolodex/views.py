@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.views import generic
 from django.contrib import messages
 from django.shortcuts import render
+from django.core import serializers
 from django.urls import reverse_lazy
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 
@@ -18,7 +19,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 
 # Django imports for forms
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import get_object_or_404
 
 # Import additional models
@@ -44,6 +45,17 @@ logger = logging.getLogger(__name__)
 ##################
 # View Functions #
 ##################
+
+
+@login_required
+def ajax_load_project(request):
+    """View function used with AJAX for retrieving project details.
+    Used in assignment forms to set the default assignment dates.
+    """
+    project_id = request.GET.get('project')
+    project = Project.objects.filter(id=project_id)
+    data = serializers.serialize('json', project)
+    return HttpResponse(data, content_type='application/json')
 
 
 @login_required
@@ -373,6 +385,31 @@ class ProjectCreate(LoginRequiredMixin, CreateView):
         client_instance = get_object_or_404(Client, pk=self.kwargs.get('pk'))
         ctx['client_name'] = client_instance
         return ctx
+
+
+class ProjectCreateWithoutClient(LoginRequiredMixin, CreateView):
+    """View for creating new projects. This view defaults to the
+    project_form.html template. This version applies no default values.
+    """
+    model = Project
+    form_class = ProjectCreateForm
+
+    def get_success_url(self):
+        """Override the function to return to the new record after creation."""
+        return reverse('rolodex:project_detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        """Override form_valid to perform additional actions on new entries."""
+        # Generate and assign a unique codename to the project
+        codename_verified = False
+        while not codename_verified:
+            new_codename = codenames.codename(uppercase=True)
+            try:
+                Project.objects.filter(codename__iequal=new_codename)
+            except Exception:
+                codename_verified = True
+        form.instance.codename = new_codename
+        return super().form_valid(form)
 
 
 class ProjectUpdate(LoginRequiredMixin, UpdateView):

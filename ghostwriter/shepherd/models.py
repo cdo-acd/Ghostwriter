@@ -205,6 +205,17 @@ class Domain(models.Model):
         help_text='Include details such as how the domain was detected, why '
                   'it was blacklisted for spam, if it was flagged with a bad '
                   'category, etc.')
+    auto_renew = models.BooleanField(
+        'Auto Renew',
+        default=True,
+        help_text='Whether or not the domain is set to renew automatically '
+                  'with the registrar'
+    )
+    expired = models.BooleanField(
+        'Expiration Status',
+        default=False,
+        help_text='Whether or not the domain registration has expired'
+    )
     # Foreign Keys
     whois_status = models.ForeignKey(
         'WhoisStatus',
@@ -256,7 +267,8 @@ class Domain(models.Model):
         """Check if the domain's expiration date is in the past."""
         expired = False
         if datetime.date.today() > self.expiration:
-            expired = True
+            if not self.auto_renew:
+                expired = True
         return expired
 
     @property
@@ -321,7 +333,6 @@ class History(models.Model):
         'ActivityType',
         on_delete=models.PROTECT,
         null=False,
-        blank=True,
         help_text='Select the intended use of this domain')
 
     class Meta:
@@ -530,13 +541,11 @@ class ServerHistory(models.Model):
         'ServerRole',
         on_delete=models.PROTECT,
         null=False,
-        blank=True,
         help_text='Select the intended role the server will play')
     activity_type = models.ForeignKey(
         'ActivityType',
         on_delete=models.PROTECT,
         null=False,
-        blank=True,
         help_text='Select the intended activity to be performed by the server')
 
     class Meta:

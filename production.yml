@@ -45,7 +45,6 @@ services:
       - ./compose/production/nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./ssl:/ssl
     ports:
-      - "0.0.0.0:80:80"
       - "0.0.0.0:443:443"
 
   redis:
